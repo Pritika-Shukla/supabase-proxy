@@ -1,26 +1,24 @@
 import NextAuth from "next-auth";
 import authConfig from "./auth.config";
-import { getProxySubdomain } from "@/lib/subdomain";
 import { NextRequest, NextResponse } from "next/server";
 
 const { auth } = NextAuth(authConfig);
 
+const SLUG_REGEX = /^[a-z0-9-]{3,50}$/;
+
 export default auth((req: NextRequest) => {
-  const host = req.headers.get("host");
-  const headerSubdomain = req.headers.get("x-proxy-subdomain");
-  const subdomain = getProxySubdomain(host, headerSubdomain);
+  const pathname = req.nextUrl.pathname;
+  const segments = pathname.slice(1).split("/").filter(Boolean);
+  const firstSegment = segments[0];
 
-  if (subdomain) {
-    const path = req.nextUrl.pathname + req.nextUrl.search;
-    const rewriteUrl = new URL(`/api/proxy${path === "/" ? "" : path}`, req.url);
-    rewriteUrl.search = req.nextUrl.search;
+  const reserved = new Set(["sign-in"]);
+  if (reserved.has(firstSegment ?? "")) {
+    return NextResponse.next();
+  }
 
-    const requestHeaders = new Headers(req.headers);
-    requestHeaders.set("x-proxy-subdomain", subdomain);
-
-    return NextResponse.rewrite(rewriteUrl, {
-      request: { headers: requestHeaders },
-    });
+  // Proxy routes: /[slug]/[...path] - bypass auth (slug-like first segment)
+  if (firstSegment && SLUG_REGEX.test(firstSegment)) {
+    return NextResponse.next();
   }
 
   const session = (req as NextRequest & { auth?: { user?: unknown } }).auth;

@@ -1,12 +1,20 @@
 import { auth } from "@/auth";
-import { getProxies } from "@/app/actions";
-import { CreateProxyForm } from "@/app/components/CreateProxyForm";
-import { ProxyList } from "@/app/components/ProxyList";
+import { getApps } from "@/app/actions";
+import { CreateAppForm } from "@/app/components/CreateAppForm";
+import { AppList } from "@/app/components/AppList";
 import { signOutAction } from "@/app/actions";
+
+function getBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  }
+ 
+}
 
 export default async function DashboardPage() {
   const session = await auth();
-  const proxies = await getProxies();
+  const apps = await getApps();
+  const baseUrl = getBaseUrl();
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -32,7 +40,7 @@ export default async function DashboardPage() {
             Welcome, {session?.user?.name ?? "User"}
           </h2>
           <p className="mt-2 text-zinc-400">
-            Create custom subdomains that proxy to your Supabase project.
+            Create path-based proxies that forward to your Supabase project.
           </p>
         </div>
 
@@ -41,20 +49,29 @@ export default async function DashboardPage() {
             <h3 className="mb-4 text-lg font-semibold text-zinc-200">
               New proxy
             </h3>
-            <CreateProxyForm />
+            <CreateAppForm />
           </section>
 
           <section>
-            <ProxyList initial={proxies} />
+            <AppList initial={apps} baseUrl={baseUrl} />
           </section>
         </div>
 
         <div className="mt-12 rounded-lg border border-zinc-800 bg-zinc-900/20 p-4">
           <h4 className="font-medium text-zinc-300">How it works</h4>
           <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-zinc-500">
-            <li>Create a proxy with your Supabase project ID and a custom name</li>
-            <li>Use <code className="rounded bg-zinc-800 px-1">myapp.proxy.pritika.xyz</code> as your Supabase URL</li>
-            <li>Configure wildcard DNS: <code className="rounded bg-zinc-800 px-1">*.proxy.pritika.xyz → your server</code></li>
+            <li>
+              Create a proxy with slug, Supabase URL, and anon key
+            </li>
+            <li>
+              Use <code className="rounded bg-zinc-800 px-1">{baseUrl}/my-app</code> as
+              your Supabase URL (append paths like /rest/v1/...)
+            </li>
+            <li>REST, Auth, Storage, Functions, and GraphQL are supported</li>
+            <li>
+              <strong>WebSocket Realtime</strong> requires a VPS-based server;
+              Next.js route handlers do not support WebSocket upgrades
+            </li>
           </ul>
         </div>
       </main>

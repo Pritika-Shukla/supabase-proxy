@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createProxy } from "@/app/actions";
+import { createApp } from "@/app/actions";
 
-export function CreateProxyForm() {
+export function CreateAppForm() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [createdUrl, setCreatedUrl] = useState<string | null>(null);
@@ -13,7 +13,7 @@ export function CreateProxyForm() {
   async function handleSubmit(formData: FormData) {
     setError(null);
     setCreatedUrl(null);
-    const result = await createProxy(null, formData);
+    const result = await createApp(null, formData);
     if (result.success) {
       setCreatedUrl(result.url);
       router.refresh();
@@ -34,42 +34,39 @@ export function CreateProxyForm() {
       <form action={handleSubmit} className="space-y-4">
         <div>
           <label
-            htmlFor="projectId"
+            htmlFor="slug"
             className="mb-1.5 block text-sm font-medium text-zinc-300"
           >
-            Supabase Project ID
+            Slug
           </label>
           <input
-            id="projectId"
-            name="projectId"
+            id="slug"
+            name="slug"
             type="text"
             required
-            placeholder="zqzinuwgxnehqoykjngm"
+            placeholder="my-app"
             className="w-full rounded-lg border border-zinc-600 bg-zinc-800/50 px-4 py-3 text-zinc-100 placeholder-zinc-500 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
           />
           <p className="mt-1 text-xs text-zinc-500">
-            From your Supabase project settings
+            3–50 chars, lowercase alphanumeric and hyphens. Your proxy URL:{" "}
+            <span className="text-emerald-400">yourdomain.com/my-app</span>
           </p>
         </div>
         <div>
           <label
-            htmlFor="customName"
+            htmlFor="supabaseUrl"
             className="mb-1.5 block text-sm font-medium text-zinc-300"
           >
-            Custom name
+            Supabase project URL
           </label>
           <input
-            id="customName"
-            name="customName"
-            type="text"
+            id="supabaseUrl"
+            name="supabaseUrl"
+            type="url"
             required
-            placeholder="myapp"
+            placeholder="https://abc.supabase.co"
             className="w-full rounded-lg border border-zinc-600 bg-zinc-800/50 px-4 py-3 text-zinc-100 placeholder-zinc-500 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
           />
-          <p className="mt-1 text-xs text-zinc-500">
-            Alphanumeric + hyphens, 3–62 chars. Your URL:{" "}
-            <span className="text-emerald-400">myapp.proxy.pritika.xyz</span>
-          </p>
         </div>
         {error && (
           <p className="rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">

@@ -15,19 +15,19 @@ model User {
   image         String?
   accounts      Account[]
   sessions      Session[]
-  proxies       Proxy[]
+  apps          App[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
 
-model Proxy {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  customName String   @unique
-  projectId  String
-  userId     String   @db.ObjectId
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+model App {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  slug        String   @unique
+  supabaseUrl String
+  userId      String   @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Account {

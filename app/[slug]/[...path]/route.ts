@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
+import { SLUG_REGEX } from "@/lib/validators";
 
 export const dynamic = "force-dynamic";
-
-const PROJECT_ID_RE = /^[a-z][a-z0-9]{2,62}$/;
 
 const STRIP_REQ_HEADERS = new Set([
   "host",
@@ -16,7 +15,6 @@ const STRIP_REQ_HEADERS = new Set([
   "upgrade",
   "proxy-authorization",
   "proxy-authenticate",
-  "x-proxy-subdomain",
 ]);
 
 const STRIP_RES_HEADERS = new Set([
@@ -30,50 +28,67 @@ const STRIP_RES_HEADERS = new Set([
   "content-length",
 ]);
 
-type Ctx = { params: Promise<{ path?: string[] }> };
+type Ctx = { params: Promise<{ slug: string; path?: string[] }> };
+
+function getProxyBase(request: NextRequest): string {
+  const host = request.headers.get("host") ?? "";
+  const proto = request.headers.get("x-forwarded-proto") ?? "https";
+  return `${proto}://${host.split(":")[0]}`;
+}
+
+function rewriteLocation(
+  location: string,
+  upstreamOrigin: string,
+  proxyBase: string
+): string {
+  if (!location?.trim()) return location;
+  try {
+    const loc = new URL(location, upstreamOrigin);
+    if (loc.origin === upstreamOrigin) {
+      return location.replace(loc.origin, proxyBase);
+    }
+  } catch {
+    /* ignore */
+  }
+  return location;
+}
 
 async function proxy(req: NextRequest, ctx: Ctx) {
-  const subdomain = req.headers.get("x-proxy-subdomain");
-  if (!subdomain) {
+  const { slug, path = [] } = await ctx.params;
+
+  if (!SLUG_REGEX.test(slug)) {
     return NextResponse.json(
-      { error: "Missing proxy subdomain" },
+      { error: "Invalid slug format", code: "INVALID_SLUG" },
       { status: 400 }
     );
   }
 
-  const mapping = await prisma.proxy.findUnique({
-    where: { customName: subdomain.toLowerCase() },
-    select: { projectId: true },
+  const app = await prisma.app.findUnique({
+    where: { slug: slug.toLowerCase() },
+    select: { supabaseUrl: true },
   });
 
-  if (!mapping) {
+  if (!app) {
     return NextResponse.json(
       { error: "Proxy not found", code: "PROXY_NOT_FOUND" },
       { status: 404 }
     );
   }
 
-  const { projectId } = mapping;
-  if (!PROJECT_ID_RE.test(projectId)) {
-    return NextResponse.json(
-      { error: "Invalid project configuration" },
-      { status: 500 }
-    );
-  }
-
-  const { path = [] } = await ctx.params;
+  const upstreamBase = app.supabaseUrl.replace(/\/$/, "");
   const pathStr = Array.isArray(path) ? path.join("/") : path;
   const search = req.nextUrl.search;
+  const upstreamUrl = `${upstreamBase}/${pathStr}${search}`;
 
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     req.headers.get("x-real-ip") ??
     "unknown";
-  const rl = rateLimit(`${ip}:${subdomain}`);
+  const rl = rateLimit(`${ip}:${slug}`);
 
   if (!rl.success) {
     return NextResponse.json(
-      { error: "Rate limit exceeded" },
+      { error: "Rate limit exceeded", code: "RATE_LIMIT_EXCEEDED" },
       {
         status: 429,
         headers: {
@@ -85,13 +100,11 @@ async function proxy(req: NextRequest, ctx: Ctx) {
     );
   }
 
-  const upstream = `https://${projectId}.supabase.co/${pathStr}${search}`;
-
   const fwdHeaders = new Headers();
   for (const [k, v] of req.headers) {
     if (!STRIP_REQ_HEADERS.has(k.toLowerCase())) fwdHeaders.set(k, v);
   }
-  fwdHeaders.set("Host", `${projectId}.supabase.co`);
+  fwdHeaders.set("Host", new URL(upstreamBase).host);
 
   const init: RequestInit & { duplex?: string } = {
     method: req.method,
@@ -106,10 +119,10 @@ async function proxy(req: NextRequest, ctx: Ctx) {
 
   let upstreamRes: Response;
   try {
-    upstreamRes = await fetch(upstream, init);
+    upstreamRes = await fetch(upstreamUrl, init);
   } catch (err) {
     return NextResponse.json(
-      { error: "Upstream unreachable", detail: String(err) },
+      { error: "Upstream unreachable", detail: String(err), code: "UPSTREAM_ERROR" },
       { status: 502 }
     );
   }
@@ -117,6 +130,12 @@ async function proxy(req: NextRequest, ctx: Ctx) {
   const resHeaders = new Headers();
   for (const [k, v] of upstreamRes.headers) {
     if (!STRIP_RES_HEADERS.has(k.toLowerCase())) resHeaders.set(k, v);
+  }
+
+  const loc = resHeaders.get("Location");
+  if (loc) {
+    const proxyBase = getProxyBase(req);
+    resHeaders.set("Location", rewriteLocation(loc, upstreamBase, proxyBase));
   }
 
   resHeaders.set("X-RateLimit-Limit", "100");
@@ -127,9 +146,11 @@ async function proxy(req: NextRequest, ctx: Ctx) {
     "GET,POST,PUT,PATCH,DELETE,OPTIONS"
   );
   resHeaders.set("Access-Control-Allow-Headers", "*");
+  resHeaders.set("Access-Control-Expose-Headers", "*");
 
   return new Response(upstreamRes.body, {
     status: upstreamRes.status,
+    statusText: upstreamRes.statusText,
     headers: resHeaders,
   });
 }

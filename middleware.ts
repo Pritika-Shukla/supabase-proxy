@@ -1,6 +1,6 @@
 import NextAuth from "next-auth";
 import authConfig from "./auth.config";
-import { NextRequest, NextResponse } from "next/server";
+import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
 
 const { auth } = NextAuth(authConfig);
 
@@ -30,11 +30,11 @@ const authMiddleware = auth((req: NextRequest) => {
   return NextResponse.next();
 });
 
-export default function middleware(req: NextRequest) {
+export default function middleware(req: NextRequest, event: NextFetchEvent) {
   if (isProxyPath(req.nextUrl.pathname)) {
     return NextResponse.next();
   }
-  return authMiddleware(req);
+  return authMiddleware(req, event as unknown as Parameters<typeof authMiddleware>[1]);
 }
 
 export const config = {

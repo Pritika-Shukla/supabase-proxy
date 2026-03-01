@@ -1,21 +1,11 @@
 "use server";
 
-import { signIn, signOut } from "@/auth";
+import { signOut } from "@/auth";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { createAppSchema, updateAppSchema } from "@/lib/validators";
+import { getBaseUrl } from "@/lib/utils";
+import { createAppSchema } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
-
-function getBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
-  }
-  return "http://localhost:3000";
-}
-
-export async function signInWithGoogle() {
-  await signIn("google", { redirectTo: "/" });
-}
 
 export async function signOutAction() {
   await signOut({ redirectTo: "/" });
@@ -80,57 +70,4 @@ export async function getApps() {
     orderBy: { createdAt: "desc" },
     select: { id: true, slug: true, supabaseUrl: true, createdAt: true },
   });
-}
-
-export async function updateApp(
-  id: string,
-  _prev: unknown,
-  formData: FormData
-): Promise<CreateAppResult | { success: false; error: string }> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return { success: false, error: "Unauthorized" };
-  }
-
-  const raw = {
-    supabaseUrl: formData.get("supabaseUrl")?.toString().trim(),
-  };
-
-  const parsed = updateAppSchema.safeParse(raw);
-  if (!parsed.success) {
-    const first = parsed.error.flatten().fieldErrors;
-    const msg = Object.values(first).flat().find(Boolean) ?? "Invalid input";
-    return { success: false, error: String(msg) };
-  }
-
-  const existing = await prisma.app.findFirst({
-    where: { id, userId: session.user.id },
-  });
-  if (!existing) return { success: false, error: "App not found" };
-
-  const updates: { supabaseUrl?: string } = {};
-  if (parsed.data.supabaseUrl) updates.supabaseUrl = parsed.data.supabaseUrl;
-
-  await prisma.app.update({ where: { id }, data: updates });
-  revalidatePath("/");
-  const base = getBaseUrl();
-  return {
-    success: true,
-    url: `${base}/${existing.slug}`,
-    slug: existing.slug,
-  };
-}
-
-export async function deleteApp(id: string): Promise<{ success: boolean; error?: string }> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
-
-  const existing = await prisma.app.findFirst({
-    where: { id, userId: session.user.id },
-  });
-  if (!existing) return { success: false, error: "App not found" };
-
-  await prisma.app.delete({ where: { id } });
-  revalidatePath("/");
-  return { success: true };
 }

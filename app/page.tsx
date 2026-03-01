@@ -1,15 +1,8 @@
 import { auth } from "@/auth";
-import { getApps } from "@/app/actions";
+import { getApps, signOutAction } from "@/app/actions";
 import { CreateAppForm } from "@/app/components/CreateAppForm";
 import { AppList } from "@/app/components/AppList";
-import { signOutAction } from "@/app/actions";
-
-function getBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
-  }
-  return "http://localhost:3000";
-}
+import { getBaseUrl } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const session = await auth();

@@ -17,5 +17,3 @@ export const createAppSchema = z.object({
     )
     .transform((url) => url.replace(/\/$/, "")),
 });
-
-export const updateAppSchema = createAppSchema.partial().omit({ slug: true });

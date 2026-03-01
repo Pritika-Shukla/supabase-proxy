@@ -3,10 +3,14 @@ import authConfig from "./auth.config";
 
 const { auth } = NextAuth(authConfig);
 
+const PROXY_RE = /^\/[a-z][a-z0-9]{2,62}\/.+/;
+
 export default auth((req) => {
-  if (!req.auth && req.nextUrl.pathname !== "/sign-in") {
-    const signInUrl = new URL("/sign-in", req.nextUrl.origin);
-    return Response.redirect(signInUrl);
+  // Proxy routes bypass auth — rate limiting lives in the route handler
+  if (PROXY_RE.test(req.nextUrl.pathname)) return;
+
+  if (!req.auth) {
+    return Response.redirect(new URL("/sign-in", req.nextUrl.origin));
   }
 });
 

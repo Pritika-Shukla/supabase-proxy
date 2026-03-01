@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ const STRIP_REQ_HEADERS = new Set([
   "upgrade",
   "proxy-authorization",
   "proxy-authenticate",
+  "x-proxy-subdomain",
 ]);
 
 const STRIP_RES_HEADERS = new Set([
@@ -28,25 +30,46 @@ const STRIP_RES_HEADERS = new Set([
   "content-length",
 ]);
 
-type Ctx = { params: Promise<{ project: string; path: string[] }> };
+type Ctx = { params: Promise<{ path?: string[] }> };
 
 async function proxy(req: NextRequest, ctx: Ctx) {
-  const { project, path } = await ctx.params;
-
-  if (!PROJECT_ID_RE.test(project)) {
+  const subdomain = req.headers.get("x-proxy-subdomain");
+  if (!subdomain) {
     return NextResponse.json(
-      { error: "Invalid project ID — must be lowercase alphanumeric (3-63 chars)" },
+      { error: "Missing proxy subdomain" },
       { status: 400 }
     );
   }
 
-  // Rate-limit by client IP
+  const mapping = await prisma.proxy.findUnique({
+    where: { customName: subdomain.toLowerCase() },
+    select: { projectId: true },
+  });
+
+  if (!mapping) {
+    return NextResponse.json(
+      { error: "Proxy not found", code: "PROXY_NOT_FOUND" },
+      { status: 404 }
+    );
+  }
+
+  const { projectId } = mapping;
+  if (!PROJECT_ID_RE.test(projectId)) {
+    return NextResponse.json(
+      { error: "Invalid project configuration" },
+      { status: 500 }
+    );
+  }
+
+  const { path = [] } = await ctx.params;
+  const pathStr = Array.isArray(path) ? path.join("/") : path;
+  const search = req.nextUrl.search;
+
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     req.headers.get("x-real-ip") ??
     "unknown";
-
-  const rl = rateLimit(ip);
+  const rl = rateLimit(`${ip}:${subdomain}`);
 
   if (!rl.success) {
     return NextResponse.json(
@@ -62,14 +85,13 @@ async function proxy(req: NextRequest, ctx: Ctx) {
     );
   }
 
-  // Build upstream URL preserving path + query string
-  const upstream = `https://${project}.supabase.co/${path.join("/")}${req.nextUrl.search}`;
+  const upstream = `https://${projectId}.supabase.co/${pathStr}${search}`;
 
-  // Forward request headers, stripping hop-by-hop / proxy headers
   const fwdHeaders = new Headers();
   for (const [k, v] of req.headers) {
     if (!STRIP_REQ_HEADERS.has(k.toLowerCase())) fwdHeaders.set(k, v);
   }
+  fwdHeaders.set("Host", `${projectId}.supabase.co`);
 
   const init: RequestInit & { duplex?: string } = {
     method: req.method,
@@ -77,7 +99,6 @@ async function proxy(req: NextRequest, ctx: Ctx) {
     redirect: "manual",
   };
 
-  // Stream the request body for methods that carry one
   if (!["GET", "HEAD"].includes(req.method)) {
     init.body = req.body;
     init.duplex = "half";
@@ -93,7 +114,6 @@ async function proxy(req: NextRequest, ctx: Ctx) {
     );
   }
 
-  // Forward response headers, stripping hop-by-hop + encoding
   const resHeaders = new Headers();
   for (const [k, v] of upstreamRes.headers) {
     if (!STRIP_RES_HEADERS.has(k.toLowerCase())) resHeaders.set(k, v);
@@ -102,10 +122,12 @@ async function proxy(req: NextRequest, ctx: Ctx) {
   resHeaders.set("X-RateLimit-Limit", "100");
   resHeaders.set("X-RateLimit-Remaining", String(rl.remaining));
   resHeaders.set("Access-Control-Allow-Origin", "*");
-  resHeaders.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  resHeaders.set(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  );
   resHeaders.set("Access-Control-Allow-Headers", "*");
 
-  // Stream the upstream body back to the client
   return new Response(upstreamRes.body, {
     status: upstreamRes.status,
     headers: resHeaders,

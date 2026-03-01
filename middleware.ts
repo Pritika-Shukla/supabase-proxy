@@ -1,17 +1,34 @@
 import NextAuth from "next-auth";
 import authConfig from "./auth.config";
+import { getProxySubdomain } from "@/lib/subdomain";
+import { NextRequest, NextResponse } from "next/server";
 
 const { auth } = NextAuth(authConfig);
 
-const PROXY_RE = /^\/[a-z][a-z0-9]{2,62}\/.+/;
+export default auth((req: NextRequest) => {
+  const host = req.headers.get("host");
+  const headerSubdomain = req.headers.get("x-proxy-subdomain");
+  const subdomain = getProxySubdomain(host, headerSubdomain);
 
-export default auth((req) => {
-  // Proxy routes bypass auth — rate limiting lives in the route handler
-  if (PROXY_RE.test(req.nextUrl.pathname)) return;
+  if (subdomain) {
+    const path = req.nextUrl.pathname + req.nextUrl.search;
+    const rewriteUrl = new URL(`/api/proxy${path === "/" ? "" : path}`, req.url);
+    rewriteUrl.search = req.nextUrl.search;
 
-  if (!req.auth) {
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set("x-proxy-subdomain", subdomain);
+
+    return NextResponse.rewrite(rewriteUrl, {
+      request: { headers: requestHeaders },
+    });
+  }
+
+  const session = (req as NextRequest & { auth?: { user?: unknown } }).auth;
+  if (!session) {
     return Response.redirect(new URL("/sign-in", req.nextUrl.origin));
   }
+
+  return NextResponse.next();
 });
 
 export const config = {

@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Supabase Proxy
 
-## Getting Started
+A JioBase-like SaaS that provides custom subdomain proxies for Supabase projects.
 
-First, run the development server:
+**Domain:** `proxy.pritika.xyz`  
+**Example:** `https://myapp.proxy.pritika.xyz` → `https://{projectId}.supabase.co`
+
+## Features
+
+- **Wildcard subdomains** – Each user gets `{customName}.proxy.pritika.xyz`
+- **DB-backed mapping** – `customName` → `projectId` stored in MongoDB
+- **Request proxying** – Path and query preserved, hop-by-hop headers stripped
+- **Rate limiting** – Per-IP per-subdomain (100 req/min default)
+- **CORS** – Proper handling for browser clients
+- **Dashboard** – Create proxies, copy URLs, manage mappings
+
+## Setup
+
+1. **Prisma**
+
+```bash
+npx prisma generate
+```
+
+2. **Environment** – Copy `.env.example` to `.env`:
+
+```env
+PROXY_DOMAIN=proxy.pritika.xyz
+NEXT_PUBLIC_PROXY_DOMAIN=proxy.pritika.xyz
+```
+
+3. **Run**
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Wildcard DNS
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+For production, add a DNS record:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Type: `A` or `CNAME`
+- Name: `*.proxy` (or `*` depending on DNS provider)
+- Value: Your server IP or hostname
 
-## Learn More
+This makes `myapp.proxy.pritika.xyz` resolve to your app.
 
-To learn more about Next.js, take a look at the following resources:
+## Local Testing
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Use the `x-proxy-subdomain` header to simulate subdomains:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+curl -H "x-proxy-subdomain: myapp" http://localhost:3000/rest/v1/
+```
 
-## Deploy on Vercel
+Or use `myapp.localhost` if your setup supports it (set `PROXY_DOMAIN=localhost`).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Tech Stack
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Next.js 16 (App Router)
+- Prisma + MongoDB
+- NextAuth (Google)
+- Tailwind CSS

@@ -3,7 +3,7 @@ import { signIn, auth } from "@/auth";
 import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
-  title: "Sign In — AppStoreReject",
+  title: "Sign In — Supabase Proxy",
   robots: { index: false, follow: false },
 };
 

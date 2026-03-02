@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { deleteApp } from "@/app/actions";
 
 type App = { id: string; slug: string; supabaseUrl: string; createdAt: Date };
 
@@ -11,8 +13,10 @@ export function AppList({
   initial: App[];
   baseUrl: string;
 }) {
+  const router = useRouter();
   const [apps, setApps] = useState(initial);
   const [copied, setCopied] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     setApps(initial);
@@ -23,6 +27,19 @@ export function AppList({
     await navigator.clipboard.writeText(url);
     setCopied(slug);
     setTimeout(() => setCopied(null), 2000);
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this proxy? This cannot be undone.")) return;
+    setDeleting(id);
+    const result = await deleteApp(id);
+    setDeleting(null);
+    if (result.success) {
+      setApps((prev) => prev.filter((a) => a.id !== id));
+      router.refresh();
+    } else {
+      alert(result.error ?? "Failed to delete");
+    }
   }
 
   if (apps.length === 0) return null;
@@ -52,6 +69,14 @@ export function AppList({
                   className="shrink-0 rounded border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-700"
                 >
                   {copied === a.slug ? "Copied" : "Copy"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(a.id)}
+                  disabled={deleting === a.id}
+                  className="shrink-0 rounded border border-red-900/50 bg-red-950/50 px-3 py-1.5 text-sm font-medium text-red-400 transition hover:bg-red-950 disabled:opacity-50"
+                >
+                  {deleting === a.id ? "Deleting…" : "Delete"}
                 </button>
               </div>
             </li>

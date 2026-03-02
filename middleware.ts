@@ -18,7 +18,7 @@ const authMiddleware = auth((req: NextRequest) => {
   const firstSegment = segments[0];
 
   const reserved = new Set(["sign-in"]);
-  if (reserved.has(firstSegment ?? "")) {
+  if (reserved.has(firstSegment ?? "") || pathname === "/") {
     return NextResponse.next();
   }
 

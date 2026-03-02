@@ -38,6 +38,16 @@ export async function createApp(
 
   const { slug, supabaseUrl } = parsed.data;
 
+  const existingCount = await prisma.app.count({
+    where: { userId: session.user.id },
+  });
+  if (existingCount >= 2) {
+    return {
+      success: false,
+      error: "You can create a maximum of 2 proxies. Delete one to create a new one.",
+    };
+  }
+
   try {
     await prisma.app.create({
       data: {
@@ -70,4 +80,18 @@ export async function getApps() {
     orderBy: { createdAt: "desc" },
     select: { id: true, slug: true, supabaseUrl: true, createdAt: true },
   });
+}
+
+export async function deleteApp(id: string): Promise<{ success: boolean; error?: string }> {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  const existing = await prisma.app.findFirst({
+    where: { id, userId: session.user.id },
+  });
+  if (!existing) return { success: false, error: "App not found" };
+
+  await prisma.app.delete({ where: { id } });
+  revalidatePath("/");
+  return { success: true };
 }

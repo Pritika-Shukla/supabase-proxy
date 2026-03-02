@@ -3,7 +3,7 @@
 import { signOut } from "@/auth";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getBaseUrl } from "@/lib/utils";
+import { getProxyBaseUrl } from "@/lib/utils";
 import { createAppSchema } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
 
@@ -57,10 +57,10 @@ export async function createApp(
       },
     });
     revalidatePath("/");
-    const base = getBaseUrl();
+    const proxyBase = getProxyBaseUrl();
     return {
       success: true,
-      url: `${base}/${slug}`,
+      url: `${proxyBase}/${slug}`,
       slug,
     };
   } catch (e) {

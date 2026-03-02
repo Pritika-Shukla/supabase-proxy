@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { createApp } from "@/app/actions";
@@ -28,19 +29,6 @@ export function CreateAppForm({ isLoggedIn }: { isLoggedIn: boolean }) {
     } catch {}
   }, [isLoggedIn]);
 
-  const closeOnEsc = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") setShowModal(false);
-    },
-    []
-  );
-
-  useEffect(() => {
-    if (showModal) {
-      document.addEventListener("keydown", closeOnEsc);
-      return () => document.removeEventListener("keydown", closeOnEsc);
-    }
-  }, [showModal, closeOnEsc]);
 
   function saveDraft() {
     const slug = slugRef.current?.value ?? "";
@@ -77,12 +65,12 @@ export function CreateAppForm({ isLoggedIn }: { isLoggedIn: boolean }) {
 
   return (
     <>
-      <div className="space-y-6">
+      <div className="space-y-5">
         <form action={handleSubmit} className="space-y-4">
           <div>
             <label
               htmlFor="slug"
-              className="mb-1.5 block text-sm font-medium text-zinc-300"
+              className="mb-1.5 block text-sm font-medium text-zinc-400"
             >
               Slug
             </label>
@@ -93,17 +81,16 @@ export function CreateAppForm({ isLoggedIn }: { isLoggedIn: boolean }) {
               type="text"
               required
               placeholder="my-app"
-              className="w-full rounded-lg border border-zinc-600 bg-zinc-800/50 px-4 py-3 text-zinc-100 placeholder-zinc-500 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+              className="w-full rounded-xl border border-zinc-900 bg-black px-4 py-3 text-zinc-100 placeholder-zinc-600 outline-none transition-all duration-200 focus:border-zinc-700 focus:ring-1 focus:ring-zinc-700"
             />
-            <p className="mt-1 text-xs text-zinc-500">
-              3–50 chars, lowercase alphanumeric and hyphens. 
-            
+            <p className="mt-1.5 text-xs text-zinc-600">
+              3-50 chars, lowercase alphanumeric and hyphens.
             </p>
           </div>
           <div>
             <label
               htmlFor="supabaseUrl"
-              className="mb-1.5 block text-sm font-medium text-zinc-300"
+              className="mb-1.5 block text-sm font-medium text-zinc-400"
             >
               Supabase project URL
             </label>
@@ -114,37 +101,53 @@ export function CreateAppForm({ isLoggedIn }: { isLoggedIn: boolean }) {
               type="url"
               required
               placeholder="https://abc.supabase.co"
-              className="w-full rounded-lg border border-zinc-600 bg-zinc-800/50 px-4 py-3 text-zinc-100 placeholder-zinc-500 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+              className="w-full rounded-xl border border-zinc-900 bg-black px-4 py-3 text-zinc-100 placeholder-zinc-600 outline-none transition-all duration-200 focus:border-zinc-700 focus:ring-1 focus:ring-zinc-700"
             />
           </div>
+
           {error && (
-            <p className="rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">
+            <p className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
               {error}
             </p>
           )}
+
+          {createdUrl && (
+            <div className="flex items-center gap-2 rounded-xl border border-zinc-900 bg-black px-4 py-3">
+              <code className="flex-1 truncate text-sm text-green-400">
+                {createdUrl}
+              </code>
+              <button
+                type="button"
+                onClick={copyUrl}
+                className="cursor-pointer shrink-0 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs font-medium text-green-400 transition hover:bg-zinc-800"
+              >
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+          )}
+
           <button
             type="submit"
-            className="w-full rounded-lg bg-emerald-600 px-4 py-3 font-medium text-white transition hover:bg-emerald-500 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50"
+            className="cursor-pointer w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm font-medium text-white transition-all duration-200 hover:bg-zinc-800"
           >
             Create proxy
           </button>
         </form>
-       
       </div>
 
-      {showModal && (
+      {showModal && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-9999 flex items-center justify-center bg-black/50 backdrop-blur-xl"
           onClick={() => setShowModal(false)}
         >
           <div
-            className="relative w-full max-w-sm mx-4 rounded-2xl border border-zinc-700/50 bg-zinc-900 p-8 shadow-2xl"
+            className="relative w-full max-w-sm mx-4 rounded-2xl border border-zinc-900 bg-zinc-950 p-8 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               type="button"
               onClick={() => setShowModal(false)}
-              className="absolute right-3 top-3 rounded-lg p-1.5 text-zinc-500 transition hover:bg-zinc-800 hover:text-zinc-300"
+              className="cursor-pointer absolute right-3 top-3 rounded-lg p-1.5 text-zinc-500 transition hover:bg-zinc-800 hover:text-zinc-300"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
@@ -152,10 +155,11 @@ export function CreateAppForm({ isLoggedIn }: { isLoggedIn: boolean }) {
               </svg>
             </button>
 
-            <h3 className="text-lg font-semibold text-zinc-100">
+           
+            <h3 className="text-lg font-semibold text-white">
               Sign in required
             </h3>
-            <p className="mt-2 text-sm text-zinc-400">
+            <p className="mt-2 text-sm text-zinc-500">
               Sign in with your Google account to create a proxy.
             </p>
 
@@ -165,7 +169,7 @@ export function CreateAppForm({ isLoggedIn }: { isLoggedIn: boolean }) {
                 saveDraft();
                 signIn("google", { callbackUrl: "/" });
               }}
-              className="mt-6 flex w-full items-center justify-center gap-3 rounded-xl bg-white px-5 py-3 text-[15px] font-medium text-[#1a1a1a] transition-all duration-200 hover:bg-white/90 hover:shadow-[0_0_30px_rgba(255,255,255,0.1)] active:scale-[0.98]"
+              className="cursor-pointer mt-6 flex w-full items-center justify-center gap-3 rounded-xl bg-white px-5 py-3 text-[15px] font-medium text-[#1a1a1a] transition-all duration-200 hover:bg-white/90 hover:shadow-[0_0_30px_rgba(255,255,255,0.1)] active:scale-[0.98]"
             >
               <svg width="18" height="18" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
@@ -177,18 +181,19 @@ export function CreateAppForm({ isLoggedIn }: { isLoggedIn: boolean }) {
             </button>
 
             <div className="mt-5 flex items-center gap-3">
-              <div className="h-px flex-1 bg-zinc-700/50" />
+              <div className="h-px flex-1 bg-zinc-900" />
               <span className="text-[11px] uppercase tracking-widest text-zinc-600">
                 secure login
               </span>
-              <div className="h-px flex-1 bg-zinc-700/50" />
+              <div className="h-px flex-1 bg-zinc-900" />
             </div>
 
-            <p className="mt-4 text-center text-xs text-zinc-500">
+            <p className="mt-4 text-center text-xs text-zinc-600">
               We&apos;ll create your account automatically if you don&apos;t have one yet.
             </p>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
